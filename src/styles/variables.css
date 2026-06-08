@@ -1,0 +1,97 @@
+:root {
+  /* Accent */
+  --accent: #007aff;
+  --accent-hover: #0066d6;
+  --accent-light: rgba(0, 122, 255, 0.08);
+
+  /* Editor */
+  --editor-bg: #ffffff;
+  --editor-fg: #1d1d1f;
+  --editor-gutter-bg: #f5f5f7;
+  --editor-gutter-fg: #86868b;
+  --editor-cursor: #1d1d1f;
+  --editor-selection: rgba(0, 122, 255, 0.15);
+  --editor-active-line: rgba(0, 0, 0, 0.03);
+  --editor-font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+  --editor-font-size: 15px;
+
+  /* Preview */
+  --preview-bg: #ffffff;
+  --preview-fg: #1d1d1f;
+  --preview-heading: #1d1d1f;
+  --wysiwyg-heading: #1d1d1f;
+  --preview-link: #007aff;
+  --preview-code-bg: #f5f5f7;
+  --preview-code-border: #e5e5e7;
+  --preview-blockquote-border: #86868b;
+  --preview-blockquote-fg: #6e6e73;
+  --preview-table-border: #e5e5e7;
+  --preview-table-header-bg: #f5f5f7;
+
+  /* UI chrome */
+  --toolbar-bg: #f5f5f7;
+  --toolbar-border: #e5e5e7;
+  --toolbar-hover: rgba(0, 0, 0, 0.04);
+  --toolbar-active: rgba(0, 0, 0, 0.08);
+  --statusbar-bg: #f5f5f7;
+  --statusbar-fg: #86868b;
+  --divider-bg: #e5e5e7;
+  --divider-hover: #007aff;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.06);
+  --radius-sm: 6px;
+  --radius-md: 8px;
+
+  /* Menu / Popup */
+  --menu-bg: #ffffff;
+  --menu-fg: #1d1d1f;
+  --menu-border: #e5e5e7;
+  --menu-hover: rgba(0, 0, 0, 0.04);
+}
+
+[data-theme="dark"] {
+  /* Apple-style true black */
+  --accent: #0a84ff;
+  --accent-hover: #409cff;
+  --accent-light: rgba(10, 132, 255, 0.12);
+
+  /* Editor */
+  --editor-bg: #000000;
+  --editor-fg: #f5f5f7;
+  --editor-gutter-bg: #1c1c1e;
+  --editor-gutter-fg: #636366;
+  --editor-cursor: #f5f5f7;
+  --editor-selection: rgba(10, 132, 255, 0.2);
+  --editor-active-line: rgba(255, 255, 255, 0.04);
+
+  /* Preview */
+  --preview-bg: #000000;
+  --preview-fg: #f5f5f7;
+  --preview-heading: #f5f5f7;
+  --wysiwyg-heading: #d1d1d6;
+  --preview-link: #0a84ff;
+  --preview-code-bg: #1c1c1e;
+  --preview-code-border: #2c2c2e;
+  --preview-blockquote-border: #636366;
+  --preview-blockquote-fg: #8e8e93;
+  --preview-table-border: #2c2c2e;
+  --preview-table-header-bg: #1c1c1e;
+
+  /* UI chrome */
+  --toolbar-bg: #1c1c1e;
+  --toolbar-border: #2c2c2e;
+  --toolbar-hover: rgba(255, 255, 255, 0.06);
+  --toolbar-active: rgba(255, 255, 255, 0.1);
+  --statusbar-bg: #1c1c1e;
+  --statusbar-fg: #636366;
+  --divider-bg: #2c2c2e;
+  --divider-hover: #0a84ff;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.4);
+
+  /* Menu / Popup */
+  --menu-bg: #1c1c1e;
+  --menu-fg: #f5f5f7;
+  --menu-border: #2c2c2e;
+  --menu-hover: rgba(255, 255, 255, 0.06);
+}
