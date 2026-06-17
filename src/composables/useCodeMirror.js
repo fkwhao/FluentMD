@@ -64,13 +64,14 @@ export function useCodeMirror(elementRef, options = {}) {
   const editorView = shallowRef(null)
   const isReady = ref(false)
   const pendingTheme = ref(null)
+  const pendingContent = ref(initialContent)
 
   function createEditor() {
     const el = elementRef()
     if (!el) return
 
     const state = EditorState.create({
-      doc: initialContent,
+      doc: pendingContent.value,
       extensions: [...createBaseExtensions(onUpdate, onSelectionChange), ...extensions],
     })
 
@@ -103,6 +104,7 @@ export function useCodeMirror(elementRef, options = {}) {
   }
 
   function setContent(text) {
+    pendingContent.value = text
     if (!editorView.value) return
     const current = editorView.value.state.doc.toString()
     if (current === text) return

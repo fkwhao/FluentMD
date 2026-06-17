@@ -3,26 +3,34 @@ import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { renderToBlocks } from '@/utils/markdown'
 import { computeVisibleBlocks, getBlockOffset } from '@/utils/virtualScroll'
 import { debounce } from '@/utils/debounce'
+import { useFileStore } from '@/stores/file'
 
 const props = defineProps({
   content: { type: String, default: '' },
 })
 
+const fileStore = useFileStore()
 const blocks = ref([])
 const containerEl = ref(null)
 const scrollTop = ref(0)
 const viewportHeight = ref(0)
 const blockRefs = ref(new Map())
 const forceUpdate = ref(0)
+let resizeObserver = null
+let contentWidth = 0
 
-const debouncedRender = debounce((text) => {
-  blocks.value = renderToBlocks(text)
+const debouncedRender = debounce((text, basePath) => {
+  blocks.value = renderToBlocks(text, basePath)
   forceUpdate.value++
 }, 150)
 
-watch(() => props.content, (newVal) => {
-  debouncedRender(newVal)
-}, { immediate: true })
+watch(
+  [() => props.content, () => fileStore.filePath],
+  ([newVal, basePath]) => {
+    debouncedRender(newVal, basePath || '')
+  },
+  { immediate: true }
+)
 
 function onScroll(e) {
   scrollTop.value = e.target.scrollTop
@@ -31,15 +39,37 @@ function onScroll(e) {
 
 function onResize() {
   if (!containerEl.value) return
+  const newWidth = containerEl.value.clientWidth
   viewportHeight.value = containerEl.value.clientHeight
+  // Width changed (e.g. splitter drag, window resize) -> text reflows, so every
+  // previously measured height is now stale and must be recomputed.
+  if (contentWidth && contentWidth !== newWidth) {
+    invalidateAllMeasurements()
+  }
+  contentWidth = newWidth
+  measureVisibleBlocks()
+}
+
+function invalidateAllMeasurements() {
+  let changed = false
+  for (const block of blocks.value) {
+    if (block.measuredHeight != null) {
+      block.measuredHeight = null
+      changed = true
+    }
+  }
+  if (changed) forceUpdate.value++
 }
 
 function measureVisibleBlocks() {
   let changed = false
   for (const [index, el] of blockRefs.value.entries()) {
-    if (el && blocks.value[index] && !blocks.value[index].measuredHeight) {
-      blocks.value[index].measuredHeight = el.offsetHeight
-      changed = true
+    if (el && blocks.value[index] && blocks.value[index].measuredHeight == null) {
+      const h = el.offsetHeight
+      if (h > 0) {
+        blocks.value[index].measuredHeight = h
+        changed = true
+      }
     }
   }
   if (changed) forceUpdate.value++
@@ -49,16 +79,39 @@ function setBlockRef(index) {
   return (el) => {
     if (el) {
       blockRefs.value.set(index, el)
-      if (blocks.value[index] && !blocks.value[index].measuredHeight) {
-        nextTick(() => {
-          if (el.offsetHeight > 0) {
-            blocks.value[index].measuredHeight = el.offsetHeight
-            forceUpdate.value++
-          }
-        })
-      }
+      // Re-measure this block once it has layout, and observe any <img> inside
+      // so async image loads trigger a height recompute after they decode.
+      nextTick(() => {
+        if (el.offsetHeight > 0 && blocks.value[index] && blocks.value[index].measuredHeight == null) {
+          blocks.value[index].measuredHeight = el.offsetHeight
+          forceUpdate.value++
+        }
+        observeImages(el)
+      })
     }
   }
+}
+
+function observeImages(el) {
+  const imgs = el.querySelectorAll('img')
+  imgs.forEach((img) => {
+    if (img.__measured) return
+    img.__measured = true
+    const handleLoad = () => {
+      // Image just decoded -> its block's height likely changed. Invalidate and
+      // re-measure so the virtual scroll offsets stay correct.
+      nextTick(() => {
+        invalidateAllMeasurements()
+        measureVisibleBlocks()
+      })
+    }
+    if (img.complete && img.naturalWidth > 0) {
+      handleLoad()
+    } else {
+      img.addEventListener('load', handleLoad, { once: true })
+      img.addEventListener('error', handleLoad, { once: true })
+    }
+  })
 }
 
 const visible = computed(() => {
@@ -80,11 +133,22 @@ const visible = computed(() => {
 
 onMounted(() => {
   onResize()
+  // Use ResizeObserver to detect panel size changes (splitter drag, etc.)
+  if (containerEl.value) {
+    resizeObserver = new ResizeObserver(() => {
+      onResize()
+    })
+    resizeObserver.observe(containerEl.value)
+  }
   window.addEventListener('resize', onResize)
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', onResize)
+  if (resizeObserver) {
+    resizeObserver.disconnect()
+    resizeObserver = null
+  }
 })
 </script>
 
@@ -225,6 +289,7 @@ onBeforeUnmount(() => {
 .preview-block :deep(table) {
   border-collapse: collapse;
   width: 100%;
+  table-layout: fixed;
   margin: 0.8em 0;
   border-radius: var(--radius-sm);
   overflow: hidden;
@@ -266,4 +331,13 @@ onBeforeUnmount(() => {
 
 .preview-block :deep(strong) { font-weight: 700; color: var(--preview-heading); }
 .preview-block :deep(em) { font-style: italic; }
+
+.preview-block :deep(.math-block) {
+  margin: 0.8em 0;
+  padding: 12px 16px;
+  text-align: center;
+  overflow-x: auto;
+  background-color: var(--accent-light);
+  border-radius: var(--radius-md);
+}
 </style>

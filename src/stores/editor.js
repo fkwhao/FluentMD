@@ -7,9 +7,9 @@ export const useEditorStore = defineStore('editor', () => {
   const isDirty = ref(false)
 
   const wordCount = computed(() => {
-    const text = content.value.trim()
+    const text = normalizeVisibleText(content.value)
     if (!text) return 0
-    return text.split(/\s+/).length
+    return text.length
   })
 
   const lineCount = computed(() => {
@@ -40,6 +40,21 @@ export const useEditorStore = defineStore('editor', () => {
 
   function markDirty() {
     isDirty.value = true
+  }
+
+  function normalizeVisibleText(text) {
+    return text
+      .replace(/```[\s\S]*?```/g, (match) => match.replace(/```/g, ''))
+      .replace(/`([^`]+)`/g, '$1')
+      .replace(/!\[([^\]]*)\]\(([^)]*)\)/g, '$1')
+      .replace(/\[([^\]]+)\]\(([^)]*)\)/g, '$1')
+      .replace(/^#{1,6}\s+/gm, '')
+      .replace(/^>\s?/gm, '')
+      .replace(/^\s*([-*+]|(\d+\.))\s+/gm, '')
+      .replace(/^\s*\|/gm, '')
+      .replace(/\|\s*$/gm, '')
+      .replace(/^\s*([-=_])\1{2,}\s*$/gm, '')
+      .replace(/\s+/g, '')
   }
 
   return {
