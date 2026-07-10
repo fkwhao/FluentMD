@@ -2,7 +2,14 @@ export function computeVisibleBlocks(blocks, scrollTop, viewportHeight, overscan
   let offsetY = 0
   let startIndex = -1
   let endIndex = blocks.length - 1
+  let totalHeight = 0
 
+  // First pass: compute total height of all blocks
+  for (let i = 0; i < blocks.length; i++) {
+    totalHeight += blocks[i].measuredHeight || blocks[i].estimatedHeight
+  }
+
+  // Second pass: determine visible range
   for (let i = 0; i < blocks.length; i++) {
     const height = blocks[i].measuredHeight || blocks[i].estimatedHeight
     const top = offsetY
@@ -22,7 +29,7 @@ export function computeVisibleBlocks(blocks, scrollTop, viewportHeight, overscan
 
   if (startIndex === -1) startIndex = 0
 
-  return { startIndex, endIndex, totalHeight: offsetY }
+  return { startIndex, endIndex, totalHeight }
 }
 
 export function getBlockOffset(blocks, index) {

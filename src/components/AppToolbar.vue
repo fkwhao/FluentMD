@@ -18,6 +18,14 @@ function handleThemeToggle() {
   settingsStore.toggleTheme()
 }
 
+function handleOutlineToggle() {
+  settingsStore.toggleOutline()
+}
+
+function handleFileTreeToggle() {
+  settingsStore.toggleFileTree()
+}
+
 function handleKeydown(e) {
   if (e.ctrlKey || e.metaKey) {
     switch (e.key.toLowerCase()) {
@@ -49,7 +57,7 @@ onBeforeUnmount(() => {
 <template>
   <div class="toolbar">
     <div class="toolbar-left">
-      <button class="toolbar-btn" @click="newFile" title="新建 (Ctrl+N)">
+      <button class="toolbar-btn" @click="newFile" title="新建 (Ctrl+N)" aria-label="新建文件">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
           <polyline points="14 2 14 8 20 8"/>
@@ -57,12 +65,12 @@ onBeforeUnmount(() => {
           <line x1="9" y1="15" x2="15" y2="15"/>
         </svg>
       </button>
-      <button class="toolbar-btn" @click="openFile" title="打开 (Ctrl+O)">
+      <button class="toolbar-btn" @click="openFile" title="打开 (Ctrl+O)" aria-label="打开文件">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
         </svg>
       </button>
-      <button class="toolbar-btn" @click="saveFile" title="保存 (Ctrl+S)">
+      <button class="toolbar-btn" @click="saveFile" title="保存 (Ctrl+S)" aria-label="保存文件">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
           <polyline points="17 21 17 13 7 13 7 21"/>
@@ -76,10 +84,38 @@ onBeforeUnmount(() => {
     </div>
     <div class="toolbar-right">
       <button
+        class="toolbar-btn file-tree-btn"
+        :class="{ active: settingsStore.fileTreeVisible }"
+        type="button"
+        title="文件树"
+        :aria-label="settingsStore.fileTreeVisible ? '关闭文件树' : '打开文件树'"
+        :aria-pressed="settingsStore.fileTreeVisible"
+        @click="handleFileTreeToggle"
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 6.5A2.5 2.5 0 0 1 5.5 4H9l2 2h7.5A2.5 2.5 0 0 1 21 8.5v8A2.5 2.5 0 0 1 18.5 19h-13A2.5 2.5 0 0 1 3 16.5z" />
+          <path d="M7 10.5h10M7 14h7" />
+        </svg>
+      </button>
+      <button
+        class="toolbar-btn outline-btn"
+        :class="{ active: settingsStore.outlineVisible }"
+        type="button"
+        title="文档目录"
+        :aria-label="settingsStore.outlineVisible ? '关闭文档目录' : '打开文档目录'"
+        :aria-pressed="settingsStore.outlineVisible"
+        @click="handleOutlineToggle"
+      >
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 5h2M4 12h2M4 19h2M10 5h10M10 12h10M10 19h10" />
+        </svg>
+      </button>
+      <button
         class="toolbar-btn mode-btn"
         :class="{ active: settingsStore.mode === 'wysiwyg' }"
         @click="handleModeSwitch"
         :title="settingsStore.mode === 'split' ? '所见即所得' : '分屏模式'"
+        :aria-label="settingsStore.mode === 'split' ? '切换到所见即所得模式' : '切换到分屏模式'"
       >
         <svg v-if="settingsStore.mode === 'split'" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <rect x="3" y="3" width="18" height="18" rx="2"/>
@@ -90,7 +126,12 @@ onBeforeUnmount(() => {
           <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
         </svg>
       </button>
-      <button class="toolbar-btn theme-btn" @click="handleThemeToggle" :title="settingsStore.theme === 'light' ? '暗色主题' : '亮色主题'">
+      <button
+        class="toolbar-btn theme-btn"
+        @click="handleThemeToggle"
+        :title="settingsStore.theme === 'light' ? '暗色主题' : '亮色主题'"
+        :aria-label="settingsStore.theme === 'light' ? '切换到暗色主题' : '切换到亮色主题'"
+      >
         <svg v-if="settingsStore.theme === 'light'" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
         </svg>
@@ -161,6 +202,11 @@ onBeforeUnmount(() => {
   opacity: 1;
   background-color: var(--accent-light);
   color: var(--accent);
+}
+
+.toolbar-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 
 .toolbar-separator {

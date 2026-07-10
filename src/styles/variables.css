@@ -15,6 +15,19 @@
   --editor-font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
   --editor-font-size: 15px;
 
+  /* Reading typography */
+  --content-font-family: 'Source Han Sans SC', 'Noto Sans CJK SC', 'Microsoft YaHei UI', 'Segoe UI', sans-serif;
+  --content-font-size: 16px;
+  --content-line-height: 1.75;
+  --content-max-width: 820px;
+  --content-h1-size: 2rem;
+  --content-h2-size: 1.5rem;
+  --content-h3-size: 1.25rem;
+  --content-h4-size: 1.1rem;
+  --content-h5-size: 1rem;
+  --content-h6-size: 0.9rem;
+  --content-code-size: 14px;
+
   /* Preview */
   --preview-bg: #ffffff;
   --preview-fg: #1d1d1f;
@@ -23,10 +36,21 @@
   --preview-link: #007aff;
   --preview-code-bg: #f5f5f7;
   --preview-code-border: #e5e5e7;
-  --preview-blockquote-border: #86868b;
-  --preview-blockquote-fg: #6e6e73;
-  --preview-table-border: #e5e5e7;
-  --preview-table-header-bg: #f5f5f7;
+  --inline-code-bg: #eef5fb;
+  --inline-code-border: #d6e5f1;
+  --inline-code-fg: #255b78;
+  --preview-blockquote-border: #4f7fa9;
+  --preview-blockquote-fg: #303840;
+  --blockquote-bg: #f1f6fa;
+  --blockquote-nested-bg: #e8f0f6;
+  --preview-table-border: #d9dfe5;
+  --preview-table-header-bg: #edf2f6;
+  --table-bg: #ffffff;
+  --table-row-alt-bg: #f8fafb;
+  --table-row-hover-bg: #eef5fb;
+  --table-header-fg: #334454;
+  --code-header-bg: #eeeef0;
+  --code-label-fg: #6e6e73;
 
   /* UI chrome */
   --toolbar-bg: #f5f5f7;
@@ -47,6 +71,10 @@
   --menu-fg: #1d1d1f;
   --menu-border: #e5e5e7;
   --menu-hover: rgba(0, 0, 0, 0.04);
+  --outline-bg: #fafafa;
+  --outline-active: rgba(0, 122, 255, 0.09);
+  --tree-folder-fg: #a8752b;
+  --tree-file-fg: #60798d;
 }
 
 [data-theme="dark"] {
@@ -72,10 +100,21 @@
   --preview-link: #0a84ff;
   --preview-code-bg: #1c1c1e;
   --preview-code-border: #2c2c2e;
-  --preview-blockquote-border: #636366;
-  --preview-blockquote-fg: #8e8e93;
-  --preview-table-border: #2c2c2e;
-  --preview-table-header-bg: #1c1c1e;
+  --inline-code-bg: #17242f;
+  --inline-code-border: #294155;
+  --inline-code-fg: #9dcef0;
+  --preview-blockquote-border: #4ca3ff;
+  --preview-blockquote-fg: #e5e5ea;
+  --blockquote-bg: #121a22;
+  --blockquote-nested-bg: #182530;
+  --preview-table-border: #3a3a3c;
+  --preview-table-header-bg: #242a30;
+  --table-bg: #111113;
+  --table-row-alt-bg: #18181b;
+  --table-row-hover-bg: #1a2732;
+  --table-header-fg: #e5e5ea;
+  --code-header-bg: #242426;
+  --code-label-fg: #a1a1a6;
 
   /* UI chrome */
   --toolbar-bg: #1c1c1e;
@@ -94,4 +133,8 @@
   --menu-fg: #f5f5f7;
   --menu-border: #2c2c2e;
   --menu-hover: rgba(255, 255, 255, 0.06);
+  --outline-bg: #111112;
+  --outline-active: rgba(10, 132, 255, 0.14);
+  --tree-folder-fg: #d3a45d;
+  --tree-file-fg: #8da9bd;
 }

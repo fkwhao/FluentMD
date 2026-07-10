@@ -6,6 +6,7 @@ const props = defineProps({
   visible: Boolean,
   x: Number,
   y: Number,
+  placement: { type: String, default: 'top' },
   editorView: Object,
   stateVersion: Number,
 })
@@ -13,6 +14,7 @@ const props = defineProps({
 const emit = defineEmits(['close'])
 
 const toolbarEl = ref(null)
+let outsideListenerTimer = null
 
 const tools = computed(() => {
   props.stateVersion
@@ -39,14 +41,22 @@ function onClickOutside(e) {
 }
 
 watch(() => props.visible, (v) => {
+  if (outsideListenerTimer) {
+    clearTimeout(outsideListenerTimer)
+    outsideListenerTimer = null
+  }
   if (v) {
-    setTimeout(() => document.addEventListener('mousedown', onClickOutside), 0)
+    outsideListenerTimer = setTimeout(() => {
+      document.addEventListener('mousedown', onClickOutside)
+      outsideListenerTimer = null
+    }, 0)
   } else {
     document.removeEventListener('mousedown', onClickOutside)
   }
 })
 
 onBeforeUnmount(() => {
+  if (outsideListenerTimer) clearTimeout(outsideListenerTimer)
   document.removeEventListener('mousedown', onClickOutside)
 })
 </script>
@@ -57,6 +67,7 @@ onBeforeUnmount(() => {
       v-if="visible && editorView"
       ref="toolbarEl"
       class="selection-toolbar"
+      :class="{ below: placement === 'bottom' }"
       :style="{ left: x + 'px', top: y + 'px' }"
     >
       <button
@@ -87,13 +98,17 @@ onBeforeUnmount(() => {
   border-radius: var(--radius-md, 8px);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
   animation: toolbarIn 0.15s ease-out;
-  transform: translateX(-50%);
+  transform: translate(-50%, -100%);
   user-select: none;
 }
 
+.selection-toolbar.below {
+  transform: translate(-50%, 0);
+}
+
 @keyframes toolbarIn {
-  from { opacity: 0; transform: translateX(-50%) translateY(4px) scale(0.95); }
-  to { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 .toolbar-tool {

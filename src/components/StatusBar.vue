@@ -13,7 +13,7 @@ const fileStore = useFileStore()
       <span class="status-badge" v-if="editorStore.isDirty">未保存</span>
     </div>
     <div class="status-right">
-      <span class="status-item">Ln {{ editorStore.lineCount }}</span>
+      <span class="status-item">第 {{ editorStore.currentLine }} 行 / 共 {{ editorStore.lineCount }} 行</span>
       <span class="status-sep">|</span>
       <span class="status-item">{{ editorStore.wordCount }} 字</span>
     </div>
