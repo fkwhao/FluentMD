@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
-import { renderToBlocks } from '@/utils/markdown'
+import { prepareMarkdownHighlighter, renderToBlocks } from '@/utils/markdown'
 import { computeVisibleBlocks, getBlockOffset } from '@/utils/virtualScroll'
 import { debounce } from '@/utils/debounce'
 import { useFileStore } from '@/stores/file'
@@ -18,8 +18,12 @@ const blockRefs = ref(new Map())
 const forceUpdate = ref(0)
 let resizeObserver = null
 let contentWidth = 0
+let renderRequest = 0
 
-const debouncedRender = debounce((text, basePath) => {
+const debouncedRender = debounce(async (text, basePath, request) => {
+  await prepareMarkdownHighlighter(text)
+  if (request !== renderRequest) return
+  blockRefs.value.clear()
   blocks.value = renderToBlocks(text, basePath)
   forceUpdate.value++
 }, 150)
@@ -27,7 +31,8 @@ const debouncedRender = debounce((text, basePath) => {
 watch(
   [() => props.content, () => fileStore.filePath],
   ([newVal, basePath]) => {
-    debouncedRender(newVal, basePath || '')
+    renderRequest += 1
+    debouncedRender(newVal, basePath || '', renderRequest)
   },
   { immediate: true }
 )
@@ -77,27 +82,32 @@ function measureVisibleBlocks() {
 
 function setBlockRef(index) {
   return (el) => {
-    if (el) {
-      blockRefs.value.set(index, el)
-      // Re-measure this block once it has layout, and observe any <img> inside
-      // so async image loads trigger a height recompute after they decode.
-      nextTick(() => {
-        if (el.offsetHeight > 0 && blocks.value[index] && blocks.value[index].measuredHeight == null) {
-          blocks.value[index].measuredHeight = el.offsetHeight
-          forceUpdate.value++
-        }
-        observeImages(el)
-      })
+    if (!el) {
+      blockRefs.value.delete(index)
+      return
     }
+
+    blockRefs.value.set(index, el)
+    // Re-measure this block once it has layout, and observe any <img> inside
+    // so async image loads trigger a height recompute after they decode.
+    nextTick(() => {
+      if (blockRefs.value.get(index) !== el) return
+      if (el.offsetHeight > 0 && blocks.value[index] && blocks.value[index].measuredHeight == null) {
+        blocks.value[index].measuredHeight = el.offsetHeight
+        forceUpdate.value++
+      }
+      observeImages(el, index)
+    })
   }
 }
 
-function observeImages(el) {
+function observeImages(el, index) {
   const imgs = el.querySelectorAll('img')
   imgs.forEach((img) => {
     if (img.__measured) return
     img.__measured = true
     const handleLoad = () => {
+      if (blockRefs.value.get(index) !== el) return
       // Image just decoded -> its block's height likely changed. Invalidate and
       // re-measure so the virtual scroll offsets stay correct.
       nextTick(() => {
@@ -144,6 +154,9 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  renderRequest += 1
+  debouncedRender.cancel()
+  blockRefs.value.clear()
   window.removeEventListener('resize', onResize)
   if (resizeObserver) {
     resizeObserver.disconnect()
@@ -174,6 +187,8 @@ onBeforeUnmount(() => {
   overflow-y: auto;
   background-color: var(--preview-bg);
   padding: 32px 40px;
+  font-family: var(--content-font-family);
+  font-size: var(--content-font-size);
 }
 
 .preview-spacer {
@@ -186,7 +201,7 @@ onBeforeUnmount(() => {
 
 /* Typography */
 .preview-block :deep(h1) {
-  font-size: 2em;
+  font-size: var(--content-h1-size);
   font-weight: 800;
   margin: 1em 0 0.5em;
   color: var(--preview-heading);
@@ -195,7 +210,7 @@ onBeforeUnmount(() => {
 }
 
 .preview-block :deep(h2) {
-  font-size: 1.5em;
+  font-size: var(--content-h2-size);
   font-weight: 700;
   margin: 0.8em 0 0.4em;
   color: var(--preview-heading);
@@ -206,20 +221,20 @@ onBeforeUnmount(() => {
 }
 
 .preview-block :deep(h3) {
-  font-size: 1.25em;
+  font-size: var(--content-h3-size);
   font-weight: 600;
   margin: 0.7em 0 0.3em;
   color: var(--preview-heading);
   line-height: 1.4;
 }
 
-.preview-block :deep(h4) { font-size: 1.1em; font-weight: 600; margin: 0.6em 0 0.3em; color: var(--preview-heading); }
-.preview-block :deep(h5) { font-size: 1em; font-weight: 600; margin: 0.5em 0 0.3em; color: var(--preview-heading); opacity: 0.85; }
-.preview-block :deep(h6) { font-size: 0.9em; font-weight: 600; margin: 0.5em 0 0.3em; color: var(--preview-heading); opacity: 0.7; text-transform: uppercase; letter-spacing: 0.05em; }
+.preview-block :deep(h4) { font-size: var(--content-h4-size); font-weight: 600; margin: 0.6em 0 0.3em; color: var(--preview-heading); }
+.preview-block :deep(h5) { font-size: var(--content-h5-size); font-weight: 600; margin: 0.5em 0 0.3em; color: var(--preview-heading); opacity: 0.85; }
+.preview-block :deep(h6) { font-size: var(--content-h6-size); font-weight: 600; margin: 0.5em 0 0.3em; color: var(--preview-heading); opacity: 0.7; text-transform: uppercase; letter-spacing: 0.05em; }
 
 .preview-block :deep(p) {
   margin: 0.6em 0;
-  line-height: 1.75;
+  line-height: var(--content-line-height);
   color: var(--preview-fg);
 }
 
@@ -236,12 +251,15 @@ onBeforeUnmount(() => {
 }
 
 .preview-block :deep(code) {
-  background-color: var(--preview-code-bg);
-  padding: 0.15em 0.4em;
-  border-radius: 4px;
-  font-size: 0.875em;
+  padding: 0.14em 0.42em;
+  border: 1px solid var(--inline-code-border);
+  border-radius: 5px;
+  background-color: var(--inline-code-bg);
+  color: var(--inline-code-fg);
+  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--inline-code-border) 68%, transparent);
+  font-size: 0.88em;
+  font-weight: 560;
   font-family: var(--editor-font-family);
-  border: 1px solid var(--preview-code-border);
 }
 
 .preview-block :deep(pre) {
@@ -258,17 +276,47 @@ onBeforeUnmount(() => {
   background: none;
   padding: 0;
   border: none;
+  border-radius: 0;
+  color: inherit;
+  box-shadow: none;
+  font-weight: 400;
   font-size: 0.875em;
   line-height: 1.6;
 }
 
 .preview-block :deep(blockquote) {
-  border-left: 3px solid var(--preview-blockquote-border);
-  padding: 4px 16px;
+  position: relative;
+  border: 1px solid color-mix(in srgb, var(--preview-blockquote-border) 26%, var(--preview-table-border));
+  border-left: 4px solid var(--preview-blockquote-border);
+  padding: 12px 20px 12px 42px;
   margin: 0.8em 0;
   color: var(--preview-blockquote-fg);
-  background-color: var(--accent-light);
-  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: var(--blockquote-bg);
+  border-radius: 0 9px 9px 0;
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--preview-blockquote-border) 8%, transparent);
+}
+
+.preview-block :deep(blockquote::before) {
+  content: '“';
+  position: absolute;
+  left: 14px;
+  top: 5px;
+  color: var(--preview-blockquote-border);
+  font-family: Georgia, serif;
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1;
+  opacity: 0.78;
+}
+
+.preview-block :deep(blockquote blockquote) {
+  margin: 0.55em 0 0.2em;
+  background: var(--blockquote-nested-bg);
+}
+
+.preview-block :deep(blockquote p),
+.preview-block :deep(blockquote li) {
+  color: inherit;
 }
 
 .preview-block :deep(ul),
@@ -286,33 +334,61 @@ onBeforeUnmount(() => {
   color: var(--accent);
 }
 
-.preview-block :deep(table) {
-  border-collapse: collapse;
+.preview-block :deep(.table-scroll) {
   width: 100%;
-  table-layout: fixed;
   margin: 0.8em 0;
-  border-radius: var(--radius-sm);
-  overflow: hidden;
+  overflow-x: auto;
   border: 1px solid var(--preview-table-border);
+  border-radius: 9px;
+  background: var(--table-bg);
+  box-shadow: var(--shadow-sm);
+}
+
+.preview-block :deep(table) {
+  width: 100%;
+  min-width: 480px;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: auto;
 }
 
 .preview-block :deep(th),
 .preview-block :deep(td) {
-  border: 1px solid var(--preview-table-border);
-  padding: 8px 14px;
+  padding: 10px 14px;
+  border-right: 1px solid var(--preview-table-border);
+  border-bottom: 1px solid var(--preview-table-border);
   text-align: left;
+  vertical-align: top;
+  line-height: 1.55;
+}
+
+.preview-block :deep(th:last-child),
+.preview-block :deep(td:last-child) {
+  border-right: 0;
+}
+
+.preview-block :deep(tr:last-child td) {
+  border-bottom: 0;
 }
 
 .preview-block :deep(th) {
   background-color: var(--preview-table-header-bg);
-  font-weight: 600;
-  font-size: 0.9em;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
+  color: var(--table-header-fg);
+  font-weight: 700;
+  font-size: 0.875em;
+  letter-spacing: 0.015em;
 }
 
 .preview-block :deep(tr:nth-child(even)) {
-  background-color: var(--preview-table-header-bg);
+  background-color: var(--table-row-alt-bg);
+}
+
+.preview-block :deep(tbody tr) {
+  transition: background-color 150ms ease;
+}
+
+.preview-block :deep(tbody tr:hover) {
+  background-color: var(--table-row-hover-bg);
 }
 
 .preview-block :deep(img) {

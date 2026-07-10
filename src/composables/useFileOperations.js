@@ -2,30 +2,54 @@ import { open, save } from '@tauri-apps/plugin-dialog'
 import { readTextFile, writeTextFile } from '@tauri-apps/plugin-fs'
 import { useEditorStore } from '@/stores/editor'
 import { useFileStore } from '@/stores/file'
+import { useSettingsStore } from '@/stores/settings'
 
 export function useFileOperations() {
   const editorStore = useEditorStore()
   const fileStore = useFileStore()
+  const settingsStore = useSettingsStore()
 
-  async function openFile() {
-    if (editorStore.isDirty) {
-      if (!confirm('当前文件未保存，是否放弃更改？')) return
-    }
+  function reportError(action, err) {
+    const message = err instanceof Error ? err.message : String(err)
+    console.error(`${action} failed:`, err)
+    window.alert(`${action}失败：${message}`)
+  }
 
-    const path = await open({
-      multiple: false,
-      filters: [{ name: 'Markdown', extensions: ['md', 'markdown', 'txt'] }],
-    })
+  function confirmDiscardChanges() {
+    return !editorStore.isDirty || confirm('当前文件未保存，是否放弃更改？')
+  }
 
-    if (!path) return
+  async function openFilePath(path, options = {}) {
+    const { skipDirtyCheck = false, showFileTree = true } = options
+    if (!path || (!skipDirtyCheck && !confirmDiscardChanges())) return false
 
     try {
       const content = await readTextFile(path)
       editorStore.setContent(content)
       const name = path.split(/[/\\]/).pop() || '未命名'
       fileStore.setFile(path, name)
+      if (showFileTree) settingsStore.setFileTreeVisible(true)
+      return true
     } catch (err) {
-      console.error('Failed to open file:', err)
+      reportError('打开文件', err)
+      return false
+    }
+  }
+
+  async function openFile() {
+    if (!confirmDiscardChanges()) return
+
+    try {
+      const path = await open({
+        multiple: false,
+        filters: [{ name: 'Markdown', extensions: ['md', 'markdown', 'txt'] }],
+      })
+
+      if (!path) return
+
+      await openFilePath(path, { skipDirtyCheck: true })
+    } catch (err) {
+      reportError('打开文件', err)
     }
   }
 
@@ -38,34 +62,33 @@ export function useFileOperations() {
       await writeTextFile(fileStore.filePath, editorStore.content)
       editorStore.markClean()
     } catch (err) {
-      console.error('Failed to save file:', err)
+      reportError('保存文件', err)
     }
   }
 
   async function saveFileAs() {
-    const path = await save({
-      filters: [{ name: 'Markdown', extensions: ['md'] }],
-    })
-
-    if (!path) return
-
     try {
+      const path = await save({
+        filters: [{ name: 'Markdown', extensions: ['md'] }],
+      })
+
+      if (!path) return
+
       await writeTextFile(path, editorStore.content)
       const name = path.split(/[/\\]/).pop() || '未命名'
       fileStore.setFile(path, name)
       editorStore.markClean()
+      settingsStore.setFileTreeVisible(true)
     } catch (err) {
-      console.error('Failed to save file:', err)
+      reportError('另存文件', err)
     }
   }
 
   function newFile() {
-    if (editorStore.isDirty) {
-      if (!confirm('当前文件未保存，是否放弃更改？')) return
-    }
+    if (!confirmDiscardChanges()) return
     editorStore.setContent('')
     fileStore.clearFile()
   }
 
-  return { openFile, saveFile, saveFileAs, newFile }
+  return { openFile, openFilePath, saveFile, saveFileAs, newFile }
 }

@@ -1,12 +1,15 @@
 <script setup>
-import { onMounted } from 'vue'
+import { defineAsyncComponent, onMounted } from 'vue'
 import { useSettingsStore } from '@/stores/settings'
 import { useEditorStore } from '@/stores/editor'
 import { useTheme } from '@/composables/useTheme'
 import AppToolbar from '@/components/AppToolbar.vue'
-import SplitView from '@/components/SplitView.vue'
-import WysiwygEditor from '@/components/WysiwygEditor.vue'
 import StatusBar from '@/components/StatusBar.vue'
+import DocumentOutline from '@/components/DocumentOutline.vue'
+
+const SplitView = defineAsyncComponent(() => import('@/components/SplitView.vue'))
+const WysiwygEditor = defineAsyncComponent(() => import('@/components/WysiwygEditor.vue'))
+const FileTree = defineAsyncComponent(() => import('@/components/FileTree.vue'))
 
 const settingsStore = useSettingsStore()
 const editorStore = useEditorStore()
@@ -45,8 +48,12 @@ onMounted(() => {
   <div class="app-container">
     <AppToolbar />
     <main class="main-content">
-      <SplitView v-if="settingsStore.mode === 'split'" />
-      <WysiwygEditor v-else v-model="editorStore.content" class="full-editor" />
+      <FileTree v-if="settingsStore.fileTreeVisible" />
+      <DocumentOutline v-else-if="settingsStore.outlineVisible" />
+      <section class="editor-stage">
+        <SplitView v-if="settingsStore.mode === 'split'" />
+        <WysiwygEditor v-else v-model="editorStore.content" />
+      </section>
     </main>
     <StatusBar />
   </div>
@@ -61,11 +68,14 @@ onMounted(() => {
 }
 
 .main-content {
+  display: flex;
   overflow: hidden;
 }
 
-.full-editor {
-  width: 100%;
+.editor-stage {
+  flex: 1;
+  min-width: 0;
   height: 100%;
+  overflow: hidden;
 }
 </style>

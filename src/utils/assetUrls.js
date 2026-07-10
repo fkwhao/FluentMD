@@ -59,7 +59,13 @@ function resolveFilePath(src, basePath = '') {
   if (src.startsWith('file:')) {
     try {
       const url = new URL(src)
-      return decodeURIComponent(url.pathname)
+      const pathname = decodeURIComponent(url.pathname)
+      if (url.host && url.host !== 'localhost') {
+        return `//${url.host}${pathname}`
+      }
+      // file:///C:/path is exposed by URL as /C:/path, while Tauri expects
+      // the native drive path without the leading slash.
+      return /^\/[a-zA-Z]:\//.test(pathname) ? pathname.slice(1) : pathname
     } catch {
       return src.replace(/^file:\/+/, '/')
     }

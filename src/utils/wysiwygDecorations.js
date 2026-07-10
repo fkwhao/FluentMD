@@ -22,7 +22,7 @@ class ImageWidget extends WidgetType {
   }
 
   toDOM() {
-    const wrap = document.createElement('div')
+    const wrap = document.createElement('span')
     wrap.className = 'cm-wysiwyg-image'
 
     const img = document.createElement('img')
@@ -56,9 +56,9 @@ class ImageWidget extends WidgetType {
 
 class HrWidget extends WidgetType {
   toDOM() {
-    const div = document.createElement('div')
-    div.className = 'cm-wysiwyg-hr'
-    return div
+    const span = document.createElement('span')
+    span.className = 'cm-wysiwyg-hr'
+    return span
   }
 
   ignoreEvent() {
@@ -74,7 +74,8 @@ class ListBulletWidget extends WidgetType {
 
   toDOM() {
     const span = document.createElement('span')
-    span.textContent = /^\d+\./.test(this.text) ? `${this.text.replace(/\./, '.')} ` : '•'
+    const marker = this.text.trim()
+    span.textContent = /^\d+\.$/.test(marker) ? `${marker} ` : '• '
     span.className = 'cm-wysiwyg-list-mark'
     return span
   }
@@ -93,7 +94,7 @@ class CodeLangWidget extends WidgetType {
   toDOM() {
     const span = document.createElement('span')
     span.className = 'cm-wysiwyg-code-lang'
-    span.textContent = this.lang || 'select language'
+    span.textContent = this.lang || '选择语言'
     span.setAttribute('data-code-lang', 'true')
     if (!this.lang) span.classList.add('cm-wysiwyg-code-lang-placeholder')
     return span
@@ -105,15 +106,6 @@ class CodeLangWidget extends WidgetType {
 }
 
 // ── Shared helpers ──────────────────────────────────────────────────────
-
-const headingStyles = {
-  ATXHeading1: { fontSize: '1.6em', fontWeight: '700', lineHeight: '1.3' },
-  ATXHeading2: { fontSize: '1.4em', fontWeight: '600', lineHeight: '1.35' },
-  ATXHeading3: { fontSize: '1.2em', fontWeight: '600', lineHeight: '1.4' },
-  ATXHeading4: { fontSize: '1.1em', fontWeight: '600', lineHeight: '1.45' },
-  ATXHeading5: { fontSize: '1em', fontWeight: '600', lineHeight: '1.5' },
-  ATXHeading6: { fontSize: '0.9em', fontWeight: '600', lineHeight: '1.5' },
-}
 
 /**
  * For large documents we never hide decorations — treating cursor as always
@@ -145,7 +137,7 @@ function findImageFallbacks(view, cursor, getBasePath) {
       const start = from + match.index
       const end = start + match[0].length
 
-      if (cursor.from > start && cursor.to < end) continue
+      if (cursor.from >= start && cursor.to <= end) continue
 
       let alreadyCovered = false
       tree.iterate({
@@ -197,6 +189,7 @@ function buildDecorations(view, getBasePath = () => '', tableCache = null) {
     // Shared mutable caches (keyed by table start position)
     const tableColumnWidths = tableCache?.columnWidths || new Map()
     const cellColumnMap = tableCache?.cellMap || new Map()
+    const blockquoteLines = new Map()
 
     let decoCount = 0
     const decoLimit = isHugeDoc ? Math.floor(MAX_DECORATIONS / 3) : MAX_DECORATIONS
@@ -224,16 +217,12 @@ function buildDecorations(view, getBasePath = () => '', tableCache = null) {
             case 'ATXHeading4':
             case 'ATXHeading5':
             case 'ATXHeading6': {
-              const style = headingStyles[node.type.name]
               const line = view.state.doc.lineAt(node.from)
               pushDeco({
                 from: line.from,
                 to: line.from,
                 deco: Decoration.line({
                   class: `cm-wysiwyg-heading cm-wysiwyg-${node.type.name}`,
-                  attributes: {
-                    style: `font-size:${style.fontSize};font-weight:${style.fontWeight};line-height:${style.lineHeight}`,
-                  },
                 }),
               })
               const headEnd = line.to
@@ -255,9 +244,11 @@ function buildDecorations(view, getBasePath = () => '', tableCache = null) {
             }
 
             case 'EmphasisMark': {
-              if (!cursorInside) {
+              const parent = node.node.parent
+              const parentActive = !isLargeDoc && parent &&
+                cursor.from >= parent.from && cursor.to <= parent.to
+              if (!parentActive) {
                 pushDeco({ from: node.from, to: node.to, deco: Decoration.replace({}) })
-                const parent = node.node.parent
                 if (parent && node.from === parent.from) {
                   const isStrong = parent.type.name === 'StrongEmphasis'
                   const contentFrom = node.to
@@ -278,6 +269,29 @@ function buildDecorations(view, getBasePath = () => '', tableCache = null) {
               break
             }
 
+            case 'StrikethroughMark': {
+              const parent = node.node.parent
+              const parentActive = !isLargeDoc && parent &&
+                cursor.from >= parent.from && cursor.to <= parent.to
+              if (!parentActive) {
+                pushDeco({ from: node.from, to: node.to, deco: Decoration.replace({}) })
+                if (parent && node.from === parent.from) {
+                  const contentFrom = node.to
+                  const contentTo = parent.lastChild ? parent.lastChild.node.from : parent.to
+                  if (contentTo > contentFrom) {
+                    pushDeco({
+                      from: contentFrom,
+                      to: contentTo,
+                      deco: Decoration.mark({
+                        attributes: { style: 'text-decoration:line-through' },
+                      }),
+                    })
+                  }
+                }
+              }
+              break
+            }
+
             case 'InlineCode': {
               if (!cursorInside) {
                 const text = view.state.doc.sliceString(node.from, node.to)
@@ -288,10 +302,7 @@ function buildDecorations(view, getBasePath = () => '', tableCache = null) {
                     from: node.from + 1,
                     to: node.to - 1,
                     deco: Decoration.mark({
-                      attributes: {
-                        style:
-                          'background-color:var(--preview-code-bg);padding:0.15em 0.4em;border-radius:3px;font-family:var(--editor-font-family);font-size:0.9em',
-                      },
+                      class: 'cm-wysiwyg-inline-code',
                     }),
                   })
                 }
@@ -301,23 +312,23 @@ function buildDecorations(view, getBasePath = () => '', tableCache = null) {
 
             case 'FencedCode': {
               const codeBlockActive = cursor.from >= node.from && cursor.to <= node.to
-              const lineFrom = view.state.doc.lineAt(node.from).from
-              let pos = lineFrom
+              const firstLine = view.state.doc.lineAt(node.from)
+              const lastLine = view.state.doc.lineAt(Math.max(node.from, node.to - 1))
+              let pos = firstLine.from
 
               // Only decorate lines that intersect the current visible ranges
               while (pos <= node.to) {
                 const line = view.state.doc.lineAt(pos)
                 const lineEnd = line.to
                 if (isLineVisible(line.from, lineEnd, view.visibleRanges)) {
+                  const classes = ['cm-wysiwyg-code-block']
+                  if (line.from === firstLine.from) classes.push('cm-wysiwyg-code-first')
+                  if (line.from === lastLine.from) classes.push('cm-wysiwyg-code-last')
                   pushDeco({
                     from: line.from,
                     to: line.from,
                     deco: Decoration.line({
-                      class: 'cm-wysiwyg-code-block',
-                      attributes: {
-                        style:
-                          'background-color:var(--preview-code-bg);font-family:var(--editor-font-family);font-size:0.9em;line-height:1.5;padding-left:16px',
-                      },
+                      class: classes.join(' '),
                     }),
                   })
                 }
@@ -395,6 +406,7 @@ function buildDecorations(view, getBasePath = () => '', tableCache = null) {
                     from: linkTextStart,
                     to: linkTextEnd,
                     deco: Decoration.mark({
+                      class: 'cm-wysiwyg-link',
                       attributes: {
                         style: 'color:var(--preview-link);text-decoration:underline',
                         title: match[2],
@@ -409,7 +421,9 @@ function buildDecorations(view, getBasePath = () => '', tableCache = null) {
             case 'Image': {
               // Respect the global decoration limit (set by pushDeco) for
               // expensive widgets, but don't skip entirely for large docs.
-              if (!(cursor.from > node.from && cursor.to < node.to)) {
+              const imageActive = !isLargeDoc &&
+                cursor.from >= node.from && cursor.to <= node.to
+              if (!imageActive) {
                 const text = view.state.doc.sliceString(node.from, node.to)
                 const altStart = text.indexOf('![')
                 const urlMarker = text.indexOf('](', altStart !== -1 ? altStart + 2 : 0)
@@ -431,7 +445,6 @@ function buildDecorations(view, getBasePath = () => '', tableCache = null) {
                       to: node.to,
                       deco: Decoration.replace({
                         widget: new ImageWidget(url, alt, getBasePath),
-                        block: true,
                       }),
                     }, /* expensive */ true)
                   }
@@ -448,19 +461,27 @@ function buildDecorations(view, getBasePath = () => '', tableCache = null) {
             }
 
             case 'Blockquote': {
-              const lineFrom = view.state.doc.lineAt(node.from).from
-              let pos = lineFrom
+              const firstLine = view.state.doc.lineAt(node.from)
+              const lastLine = view.state.doc.lineAt(Math.max(node.from, node.to - 1))
+              let depth = 1
+              for (let parent = node.node.parent; parent; parent = parent.parent) {
+                if (parent.type.name === 'Blockquote') depth++
+              }
+
+              let pos = firstLine.from
               while (pos <= node.to) {
                 const line = view.state.doc.lineAt(pos)
                 const lineEnd = line.to
                 if (isLineVisible(line.from, lineEnd, view.visibleRanges)) {
-                  pushDeco({
-                    from: line.from,
-                    to: line.from,
-                    deco: Decoration.line({
-                      class: 'cm-wysiwyg-blockquote',
-                    }),
-                  })
+                  const current = blockquoteLines.get(line.from) || {
+                    depth: 0,
+                    first: false,
+                    last: false,
+                  }
+                  current.depth = Math.max(current.depth, depth)
+                  current.first ||= line.from === firstLine.from
+                  current.last ||= line.from === lastLine.from
+                  blockquoteLines.set(line.from, current)
                 }
                 pos = lineEnd + 1
                 if (pos > view.state.doc.length) break
@@ -496,30 +517,22 @@ function buildDecorations(view, getBasePath = () => '', tableCache = null) {
               if (!tableColumnWidths.has(node.from)) {
                 try {
                   const columnWidths = []
-                  node.node.iterate({
-                    enter(child) {
-                      if (child.type.name === 'TableHeader' || child.type.name === 'TableRow') {
-                        let colIdx = 0
-                        const rowCursor = child.node.cursor()
-                        if (rowCursor.firstChild()) {
-                          do {
-                            if (rowCursor.type.name === 'TableCell') {
-                              const cellText = view.state.doc.sliceString(rowCursor.from, rowCursor.to)
-                              const contentLen = cellText.trim().length
-                              if (columnWidths.length <= colIdx) {
-                                columnWidths.push(contentLen)
-                              } else if (contentLen > columnWidths[colIdx]) {
-                                columnWidths[colIdx] = contentLen
-                              }
-                              cellColumnMap.set(rowCursor.from, { colIdx, tableFrom: node.from })
-                              colIdx++
-                            }
-                          } while (rowCursor.nextSibling())
-                          rowCursor.parent()
-                        }
+                  for (let row = node.node.firstChild; row; row = row.nextSibling) {
+                    if (row.type.name !== 'TableHeader' && row.type.name !== 'TableRow') continue
+                    let colIdx = 0
+                    for (let cell = row.firstChild; cell; cell = cell.nextSibling) {
+                      if (cell.type.name !== 'TableCell') continue
+                      const cellText = view.state.doc.sliceString(cell.from, cell.to)
+                      const contentLen = cellText.trim().length
+                      if (columnWidths.length <= colIdx) {
+                        columnWidths.push(contentLen)
+                      } else if (contentLen > columnWidths[colIdx]) {
+                        columnWidths[colIdx] = contentLen
                       }
-                    },
-                  })
+                      cellColumnMap.set(cell.from, { colIdx, tableFrom: node.from })
+                      colIdx++
+                    }
+                  }
                   // Store column count and widths for percentage-based equal-width columns
                   tableColumnWidths.set(node.from, { widths: columnWidths, colCount: columnWidths.length })
                 } catch (e) {
@@ -550,42 +563,61 @@ function buildDecorations(view, getBasePath = () => '', tableCache = null) {
 
             case 'TableRow': {
               const lineFrom = view.state.doc.lineAt(node.from).from
+              let rowIndex = 0
+              let hasFollowingRow = false
+              for (let sibling = node.node.prevSibling; sibling; sibling = sibling.prevSibling) {
+                if (sibling.type.name === 'TableRow') rowIndex++
+              }
+              for (let sibling = node.node.nextSibling; sibling; sibling = sibling.nextSibling) {
+                if (sibling.type.name === 'TableRow') {
+                  hasFollowingRow = true
+                  break
+                }
+              }
+              const rowClasses = ['cm-wysiwyg-table-line', 'cm-wysiwyg-table-row']
+              if (rowIndex % 2 === 1) rowClasses.push('cm-wysiwyg-table-row-alt')
+              if (!hasFollowingRow) rowClasses.push('cm-wysiwyg-table-last')
               pushDeco({
                 from: lineFrom,
                 to: lineFrom,
                 deco: Decoration.line({
-                  class: 'cm-wysiwyg-table-line cm-wysiwyg-table-row',
+                  class: rowClasses.join(' '),
                 }),
               })
               break
             }
 
             case 'TableCell': {
-              if (!cursorInside) {
-                // Equal column widths via percentage — each cell takes 1/N of the line
-                let colStyle = 'padding:0 12px;color:inherit;display:inline-block;box-sizing:border-box;overflow:hidden;text-overflow:ellipsis'
-                const colInfo = cellColumnMap.get(node.from)
-                if (colInfo) {
-                  const tableData = tableColumnWidths.get(colInfo.tableFrom)
-                  if (tableData && tableData.colCount > 0) {
-                    colStyle += `;width:${(100 / tableData.colCount).toFixed(4)}%`
-                  }
+              // Equal column widths via percentage — include whitespace around
+              // cell content so the columns add up to exactly 100% after the
+              // pipe delimiters are hidden.
+              let colStyle = 'padding:0 14px;color:inherit;display:inline-block;box-sizing:border-box;overflow:hidden;text-overflow:ellipsis;vertical-align:top'
+              const colInfo = cellColumnMap.get(node.from)
+              if (colInfo) {
+                const tableData = tableColumnWidths.get(colInfo.tableFrom)
+                if (tableData && tableData.colCount > 0) {
+                  colStyle += `;width:${(100 / tableData.colCount).toFixed(4)}%`
                 }
-                pushDeco({
-                  from: node.from,
-                  to: node.to,
-                  deco: Decoration.mark({
-                    attributes: { style: colStyle },
-                  }),
-                })
               }
+
+              const previous = node.node.prevSibling
+              const next = node.node.nextSibling
+              const cellFrom = previous?.type.name === 'TableDelimiter' ? previous.to : node.from
+              const cellTo = next?.type.name === 'TableDelimiter' ? next.from : node.to
+              pushDeco({
+                from: cellFrom,
+                to: cellTo,
+                deco: Decoration.mark({
+                  attributes: { style: colStyle },
+                }),
+              })
               break
             }
 
             case 'TableDelimiter': {
-              if (!cursorInside) {
-                const text = view.state.doc.sliceString(node.from, node.to)
-                if (text.includes('-')) {
+              const text = view.state.doc.sliceString(node.from, node.to)
+              if (text.includes('-')) {
+                if (!cursorInside) {
                   const line = view.state.doc.lineAt(node.from)
                   pushDeco({
                     from: line.from,
@@ -595,9 +627,11 @@ function buildDecorations(view, getBasePath = () => '', tableCache = null) {
                     }),
                   })
                   pushDeco({ from: line.from, to: line.to, deco: Decoration.replace({}) })
-                } else {
-                  pushDeco({ from: node.from, to: node.to, deco: Decoration.replace({}) })
                 }
+              } else {
+                // Keep row layout stable while editing a cell by hiding pipe
+                // markers consistently, including the marker at the cursor.
+                pushDeco({ from: node.from, to: node.to, deco: Decoration.replace({}) })
               }
               break
             }
@@ -607,6 +641,20 @@ function buildDecorations(view, getBasePath = () => '', tableCache = null) {
           }
           },
         })
+    }
+
+    for (const [lineFrom, quote] of blockquoteLines) {
+      const classes = [
+        'cm-wysiwyg-blockquote',
+        `cm-wysiwyg-blockquote-depth-${Math.min(quote.depth, 3)}`,
+      ]
+      if (quote.first) classes.push('cm-wysiwyg-blockquote-first')
+      if (quote.last) classes.push('cm-wysiwyg-blockquote-last')
+      pushDeco({
+        from: lineFrom,
+        to: lineFrom,
+        deco: Decoration.line({ class: classes.join(' ') }),
+      })
     }
 
     if (decorationErrors.length > 0) {
@@ -622,7 +670,6 @@ function buildDecorations(view, getBasePath = () => '', tableCache = null) {
           to: fb.to,
           deco: Decoration.replace({
             widget: new ImageWidget(fb.url, fb.alt, getBasePath),
-            block: true,
           }),
         }, /* expensive */ true)
       }
@@ -635,9 +682,9 @@ function buildDecorations(view, getBasePath = () => '', tableCache = null) {
         pushDeco({
           from: m.from,
           to: m.to,
-          deco: m.block
-            ? Decoration.replace({ widget: m.widget, block: true })
-            : Decoration.replace({ widget: m.widget }),
+          deco: m.lineClass
+            ? Decoration.line({ class: m.lineClass })
+            : Decoration.replace(m.widget ? { widget: m.widget } : {}),
         }, /* expensive */ true)
       }
     }
@@ -698,6 +745,7 @@ export const wysiwygPlugin = createWysiwygPlugin()
 
 export const wysiwygTheme = EditorView.theme({
   '.cm-wysiwyg-code-block': {},
+  '.cm-wysiwyg-image': { display: 'block', width: '100%' },
   '.cm-wysiwyg-image img': { maxWidth: '100%', borderRadius: '4px' },
   '.cm-wysiwyg-hr': { border: 'none', borderTop: '1px solid var(--toolbar-border)', margin: '0.5em 0', display: 'block', width: '100%' },
   '.cm-wysiwyg-list-mark': { color: 'var(--editor-fg)', opacity: '0.5' },
@@ -739,9 +787,9 @@ export const wysiwygTheme = EditorView.theme({
   },
   '.cm-wysiwyg-blockquote': {
     color: 'var(--preview-blockquote-fg)',
-    paddingLeft: '16px',
-    borderLeft: '3px solid var(--accent)',
-    backgroundColor: 'var(--accent-light)',
+    paddingLeft: '18px',
+    borderLeft: '3px solid var(--preview-blockquote-border)',
+    backgroundColor: 'var(--blockquote-bg)',
   },
   '.cm-wysiwyg-math-inline': {
     cursor: 'pointer',
@@ -750,6 +798,7 @@ export const wysiwygTheme = EditorView.theme({
     backgroundColor: 'var(--accent-light)',
   },
   '.cm-wysiwyg-math-block': {
+    display: 'block',
     cursor: 'pointer',
     padding: '12px 16px',
     margin: '8px 0',
@@ -757,5 +806,10 @@ export const wysiwygTheme = EditorView.theme({
     backgroundColor: 'var(--accent-light)',
     textAlign: 'center',
     overflowX: 'auto',
+  },
+  '.cm-wysiwyg-math-hidden-line': {
+    height: '0',
+    lineHeight: '0',
+    padding: '0',
   },
 })

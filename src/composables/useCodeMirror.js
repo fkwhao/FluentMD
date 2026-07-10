@@ -1,6 +1,6 @@
 import { ref, shallowRef, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { EditorView, keymap, lineNumbers, highlightActiveLineGutter, highlightActiveLine } from '@codemirror/view'
-import { EditorState, Compartment } from '@codemirror/state'
+import { EditorState, Compartment, Annotation, Transaction } from '@codemirror/state'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { languages } from '@codemirror/language-data'
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
@@ -13,6 +13,7 @@ import { toggleBold, toggleItalic } from '@/utils/formatCommands'
 
 const themeCompartment = new Compartment()
 const readOnlyCompartment = new Compartment()
+const externalContentUpdate = Annotation.define()
 
 function createBaseExtensions(onUpdate, onSelectionChange) {
   const extensions = [
@@ -39,7 +40,10 @@ function createBaseExtensions(onUpdate, onSelectionChange) {
     ]),
     EditorView.lineWrapping,
     EditorView.updateListener.of((update) => {
-      if (update.docChanged && onUpdate) {
+      const isExternalUpdate = update.transactions.some(
+        (transaction) => transaction.annotation(externalContentUpdate)
+      )
+      if (update.docChanged && onUpdate && !isExternalUpdate) {
         onUpdate(update.state.doc.toString(), update)
       }
       if (update.selectionSet && onSelectionChange) {
@@ -110,6 +114,11 @@ export function useCodeMirror(elementRef, options = {}) {
     if (current === text) return
     editorView.value.dispatch({
       changes: { from: 0, to: current.length, insert: text },
+      selection: { anchor: 0 },
+      annotations: [
+        externalContentUpdate.of(true),
+        Transaction.addToHistory.of(false),
+      ],
     })
   }
 
@@ -119,8 +128,10 @@ export function useCodeMirror(elementRef, options = {}) {
 
   function setCursor(pos) {
     if (!editorView.value) return
+    const safePos = Math.max(0, Math.min(pos, editorView.value.state.doc.length))
     editorView.value.dispatch({
-      selection: { anchor: pos },
+      selection: { anchor: safePos },
+      effects: EditorView.scrollIntoView(safePos, { y: 'center' }),
     })
     editorView.value.focus()
   }

@@ -1,36 +1,58 @@
 <script setup>
+import { onBeforeUnmount } from 'vue'
+
 const emit = defineEmits(['resize'])
 
 let isDragging = false
-let startY = 0
+let startX = 0
 
-function onMouseDown(e) {
+function onPointerDown(e) {
+  if (e.button !== 0) return
+  e.preventDefault()
   isDragging = true
-  startY = e.clientX
-  document.addEventListener('mousemove', onMouseMove)
-  document.addEventListener('mouseup', onMouseUp)
+  startX = e.clientX
+  document.addEventListener('pointermove', onPointerMove)
+  document.addEventListener('pointerup', stopDragging)
+  document.addEventListener('pointercancel', stopDragging)
   document.body.style.cursor = 'col-resize'
   document.body.style.userSelect = 'none'
 }
 
-function onMouseMove(e) {
+function onPointerMove(e) {
   if (!isDragging) return
-  const delta = e.clientX - startY
-  startY = e.clientX
+  const delta = e.clientX - startX
+  startX = e.clientX
   emit('resize', delta)
 }
 
-function onMouseUp() {
+function stopDragging() {
   isDragging = false
-  document.removeEventListener('mousemove', onMouseMove)
-  document.removeEventListener('mouseup', onMouseUp)
+  document.removeEventListener('pointermove', onPointerMove)
+  document.removeEventListener('pointerup', stopDragging)
+  document.removeEventListener('pointercancel', stopDragging)
   document.body.style.cursor = ''
   document.body.style.userSelect = ''
 }
+
+function onKeydown(e) {
+  if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return
+  e.preventDefault()
+  emit('resize', e.key === 'ArrowLeft' ? -10 : 10)
+}
+
+onBeforeUnmount(stopDragging)
 </script>
 
 <template>
-  <div class="resizable-divider" @mousedown="onMouseDown"></div>
+  <div
+    class="resizable-divider"
+    role="separator"
+    aria-label="调整编辑区与预览区宽度"
+    aria-orientation="vertical"
+    tabindex="0"
+    @pointerdown="onPointerDown"
+    @keydown="onKeydown"
+  ></div>
 </template>
 
 <style scoped>
@@ -55,6 +77,11 @@ function onMouseUp() {
 
 .resizable-divider:hover {
   background-color: var(--divider-hover);
-  width: 2px;
+}
+
+.resizable-divider:focus-visible {
+  background-color: var(--divider-hover);
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 </style>

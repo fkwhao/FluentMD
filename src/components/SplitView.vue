@@ -9,24 +9,25 @@ import { useEditorStore } from '@/stores/editor'
 const settingsStore = useSettingsStore()
 const editorStore = useEditorStore()
 
-const leftWidth = ref(50)
+const containerEl = ref(null)
 
 function handleResize(delta) {
-  const container = document.querySelector('.split-container')
+  const container = containerEl.value
   if (!container) return
-  const totalWidth = container.clientWidth - 4 // minus divider
-  const currentLeftPx = (leftWidth.value / 100) * totalWidth
+  const totalWidth = container.clientWidth - 1
+  if (totalWidth <= 0) return
+  const currentLeftPx = settingsStore.splitRatio * totalWidth
   const newLeftPx = currentLeftPx + delta
-  const newPercent = Math.max(20, Math.min(80, (newLeftPx / totalWidth) * 100))
-  leftWidth.value = newPercent
+  const newRatio = Math.max(0.2, Math.min(0.8, newLeftPx / totalWidth))
+  settingsStore.setSplitRatio(newRatio)
 }
 
-const leftStyle = computed(() => ({ width: leftWidth.value + '%' }))
-const rightStyle = computed(() => ({ width: (100 - leftWidth.value) + '%' }))
+const leftStyle = computed(() => ({ flexGrow: settingsStore.splitRatio }))
+const rightStyle = computed(() => ({ flexGrow: 1 - settingsStore.splitRatio }))
 </script>
 
 <template>
-  <div class="split-container">
+  <div ref="containerEl" class="split-container">
     <div class="split-left" :style="leftStyle">
       <EditorPanel v-model="editorStore.content" />
     </div>
@@ -47,6 +48,7 @@ const rightStyle = computed(() => ({ width: (100 - leftWidth.value) + '%' }))
 
 .split-left,
 .split-right {
+  flex-basis: 0;
   overflow: hidden;
   min-width: 0;
 }

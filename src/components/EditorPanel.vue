@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
+import { ref, onMounted, watch, nextTick } from 'vue'
 import { useCodeMirror } from '@/composables/useCodeMirror'
 import { useEditorStore } from '@/stores/editor'
 import { useSettingsStore } from '@/stores/settings'
@@ -18,7 +18,7 @@ const editorEl = ref(null)
 const editorStateVersion = ref(0)
 
 const contextMenu = ref({ visible: false, x: 0, y: 0 })
-const selectionToolbar = ref({ visible: false, x: 0, y: 0 })
+const selectionToolbar = ref({ visible: false, x: 0, y: 0, placement: 'top' })
 
 function handleContextMenu(event) {
   event.preventDefault()
@@ -28,15 +28,18 @@ function handleContextMenu(event) {
 
 function handleSelectionChange(update) {
   const sel = update.state.selection.main
+  editorStore.setCursor(sel.head)
   editorStateVersion.value += 1
   if (sel.from !== sel.to && sel.length > 0) {
     const view = update.view
     const coords = view.coordsAtPos(sel.from)
     if (coords) {
+      const placeBelow = coords.top < 52
       selectionToolbar.value = {
         visible: true,
-        x: (coords.left + coords.right) / 2,
-        y: coords.top - 8,
+        x: Math.max(84, Math.min(window.innerWidth - 84, (coords.left + coords.right) / 2)),
+        y: placeBelow ? coords.bottom + 8 : coords.top - 8,
+        placement: placeBelow ? 'bottom' : 'top',
       }
     }
   } else {
@@ -44,7 +47,7 @@ function handleSelectionChange(update) {
   }
 }
 
-const { editorView, setContent, setTheme, focus } = useCodeMirror(
+const { editorView, setContent, setCursor, setTheme } = useCodeMirror(
   () => editorEl.value,
   {
     initialContent: props.modelValue,
@@ -67,8 +70,14 @@ watch(() => settingsStore.theme, (theme) => {
   setTheme(theme === 'dark')
 }, { immediate: true })
 
-onMounted(() => {
-  focus()
+watch(() => editorStore.navigationRequest, async () => {
+  await nextTick()
+  setCursor(editorStore.navigationTarget)
+})
+
+onMounted(async () => {
+  await nextTick()
+  setCursor(editorStore.cursorPos)
 })
 </script>
 
@@ -86,6 +95,7 @@ onMounted(() => {
     :visible="selectionToolbar.visible"
     :x="selectionToolbar.x"
     :y="selectionToolbar.y"
+    :placement="selectionToolbar.placement"
     :editorView="editorView"
     :stateVersion="editorStateVersion"
     @close="selectionToolbar.visible = false"
