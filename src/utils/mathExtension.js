@@ -50,57 +50,161 @@ function isInsideCode(view, pos) {
   return false
 }
 
-export function findMathDecorations(view, cursor) {
+function isSelectionInside(cursor, from, to) {
+  return cursor.from > from && cursor.to < to
+}
+
+export function removeOverlappingDecorations(decorations, from, to) {
+  let writeIndex = 0
+  let removed = 0
+
+  for (const decoration of decorations) {
+    const hasWidth = decoration.from < decoration.to
+    const overlaps = hasWidth && decoration.from < to && decoration.to > from
+    if (overlaps) {
+      removed++
+    } else {
+      decorations[writeIndex++] = decoration
+    }
+  }
+
+  decorations.length = writeIndex
+  return removed
+}
+
+function parseLinePrefix(text) {
+  let index = 0
+  while (text[index] === ' ' || text[index] === '\t') index++
+
+  const indentEnd = index
+  let quoteDepth = 0
+  while (text[index] === '>') {
+    quoteDepth++
+    index++
+    while (text[index] === ' ' || text[index] === '\t') index++
+  }
+
+  return { indentEnd, prefixEnd: index, quoteDepth }
+}
+
+function findClosingDoubleDollar(text) {
+  let searchFrom = 0
+  while (searchFrom < text.length) {
+    const index = text.indexOf('$$', searchFrom)
+    if (index < 0) return -1
+    if (!text.slice(index + 2).trim()) return index
+    searchFrom = index + 2
+  }
+  return -1
+}
+
+function findBlockMathDecorations(view, cursor) {
   const decorations = []
+  const doc = view.state.doc
+  const visitedLines = new Set()
+
+  for (const visibleRange of view.visibleRanges) {
+    const firstLine = doc.lineAt(visibleRange.from).number
+    const lastLine = doc.lineAt(Math.min(visibleRange.to, doc.length)).number
+
+    for (let lineNumber = firstLine; lineNumber <= lastLine; lineNumber++) {
+      if (visitedLines.has(lineNumber)) continue
+      visitedLines.add(lineNumber)
+
+      const openingLine = doc.line(lineNumber)
+      const openingPrefix = parseLinePrefix(openingLine.text)
+      const openingText = openingLine.text.slice(openingPrefix.prefixEnd)
+      if (!openingText.startsWith('$$')) continue
+
+      const sourceFrom = openingLine.from + openingPrefix.prefixEnd
+      if (isInsideCode(view, sourceFrom)) continue
+
+      const firstContent = openingText.slice(2)
+      const sameLineClose = findClosingDoubleDollar(firstContent)
+
+      if (sameLineClose >= 0) {
+        const sourceTo = sourceFrom + 2 + sameLineClose + 2
+        if (!isSelectionInside(cursor, sourceFrom, sourceTo)) {
+          decorations.push({
+            from: sourceFrom,
+            to: sourceTo,
+            widget: new BlockMathWidget(firstContent.slice(0, sameLineClose).trim()),
+          })
+        }
+        continue
+      }
+
+      const texLines = [firstContent]
+      const continuationLines = []
+      let sourceTo = -1
+
+      for (let nextNumber = lineNumber + 1; nextNumber <= doc.lines; nextNumber++) {
+        const line = doc.line(nextNumber)
+        const prefix = parseLinePrefix(line.text)
+        let formulaText = line.text
+        let contentFrom = line.from
+
+        if (openingPrefix.quoteDepth > 0) {
+          if (prefix.quoteDepth !== openingPrefix.quoteDepth) break
+          formulaText = line.text.slice(prefix.prefixEnd)
+          contentFrom = line.from + prefix.prefixEnd
+        } else if (prefix.quoteDepth > 0) {
+          break
+        }
+
+        const close = findClosingDoubleDollar(formulaText)
+        if (close >= 0) {
+          texLines.push(formulaText.slice(0, close))
+          sourceTo = contentFrom + close + 2
+          continuationLines.push({ line, from: contentFrom, to: sourceTo })
+          break
+        }
+
+        texLines.push(formulaText)
+        continuationLines.push({ line, from: contentFrom, to: line.to })
+      }
+
+      if (sourceTo < 0 || isSelectionInside(cursor, sourceFrom, sourceTo)) continue
+
+      decorations.push({
+        from: sourceFrom,
+        to: openingLine.to,
+        widget: new BlockMathWidget(texLines.join('\n').trim()),
+      })
+
+      for (const continuation of continuationLines) {
+        if (continuation.to > continuation.from) {
+          decorations.push({
+            from: continuation.from,
+            to: continuation.to,
+            widget: null,
+          })
+        }
+        decorations.push({
+          from: continuation.line.from,
+          to: continuation.line.from,
+          lineClass: 'cm-wysiwyg-math-hidden-line',
+        })
+      }
+    }
+  }
+
+  return decorations
+}
+
+export function findMathDecorations(view, cursor) {
+  const decorations = findBlockMathDecorations(view, cursor)
 
   for (const { from, to } of view.visibleRanges) {
     const text = view.state.doc.sliceString(from, to)
-
-    // Block math: $$...$$
-    const blockRegex = /^[ \t]*\$\$([\s\S]+?)\$\$[ \t]*$/gm
     let match
-    while ((match = blockRegex.exec(text)) !== null) {
-      const start = from + match.index
-      const end = start + match[0].length
-      if (isInsideCode(view, start)) continue
-      // Treat a cursor on either boundary as active so clicking a rendered
-      // formula reveals its source and makes it editable.
-      if (cursor.to < start || cursor.from > end) {
-        const startLine = view.state.doc.lineAt(start)
-        const endLine = view.state.doc.lineAt(end)
-        decorations.push({
-          from: start,
-          to: startLine.number === endLine.number ? end : startLine.to,
-          widget: new BlockMathWidget(match[1].trim()),
-        })
-
-        // Plugin decorations cannot replace line breaks. Hide the remaining
-        // source line by line and collapse those lines instead.
-        for (let lineNumber = startLine.number + 1; lineNumber <= endLine.number; lineNumber++) {
-          const line = view.state.doc.line(lineNumber)
-          const hideTo = lineNumber === endLine.number ? end : line.to
-          if (hideTo > line.from) {
-            decorations.push({
-              from: line.from,
-              to: hideTo,
-              widget: null,
-            })
-          }
-          decorations.push({
-            from: line.from,
-            to: line.from,
-            lineClass: 'cm-wysiwyg-math-hidden-line',
-          })
-        }
-      }
-    }
 
     // Inline math: $...$ (not $)
     const inlineRegex = /(?<![\\$])\$(?!\$|\s)([^$\n]*?\S)\$(?!\$)/g
     while ((match = inlineRegex.exec(text)) !== null) {
       const start = from + match.index
       const end = start + match[0].length
-      if (cursor.to < start || cursor.from > end) {
+      if (!isSelectionInside(cursor, start, end)) {
         if (!isInsideCode(view, start)) {
           decorations.push({
             from: start,

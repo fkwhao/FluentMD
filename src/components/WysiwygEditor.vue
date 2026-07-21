@@ -276,7 +276,7 @@ onMounted(async () => {
 
 .wysiwyg-editor :deep(.cm-line) {
   line-height: var(--content-line-height);
-  padding: 1px 10px;
+  padding: 0 10px;
 }
 
 .wysiwyg-editor :deep(.cm-activeLine) {
@@ -456,7 +456,7 @@ onMounted(async () => {
 .wysiwyg-editor :deep(.cm-line.cm-wysiwyg-blockquote) {
   color: var(--preview-blockquote-fg);
   line-height: 1.68;
-  padding: 6px 20px;
+  padding: 0 20px;
   border-right: 1px solid color-mix(in srgb, var(--preview-blockquote-border) 24%, var(--preview-table-border));
   border-left: 4px solid var(--preview-blockquote-border);
   background: var(--blockquote-bg);

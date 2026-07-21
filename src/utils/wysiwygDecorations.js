@@ -1,7 +1,7 @@
 import { ViewPlugin, Decoration, WidgetType, EditorView } from '@codemirror/view'
 import { syntaxTree } from '@codemirror/language'
 import { RangeSetBuilder } from '@codemirror/state'
-import { findMathDecorations } from '@/utils/mathExtension'
+import { findMathDecorations, removeOverlappingDecorations } from '@/utils/mathExtension'
 import { resolveMarkdownAssetSrc } from '@/utils/assetUrls'
 
 // ── Performance thresholds ──────────────────────────────────────────────
@@ -676,17 +676,20 @@ function buildDecorations(view, getBasePath = () => '', tableCache = null) {
     }
 
     // Math decorations — skip for large docs (KaTeX rendering is expensive)
-    if (!isLargeDoc) {
-      const mathDecos = findMathDecorations(view, cursor)
-      for (const m of mathDecos) {
-        pushDeco({
-          from: m.from,
-          to: m.to,
-          deco: m.lineClass
-            ? Decoration.line({ class: m.lineClass })
-            : Decoration.replace(m.widget ? { widget: m.widget } : {}),
-        }, /* expensive */ true)
+    // The scanner only visits visible ranges. Keep math enabled for large
+    // documents so WYSIWYG matches the split preview instead of showing raw TeX.
+    const mathDecos = findMathDecorations(view, cursor)
+    for (const m of mathDecos) {
+      if (!m.lineClass && m.to > m.from) {
+        decoCount -= removeOverlappingDecorations(widgets, m.from, m.to)
       }
+      pushDeco({
+        from: m.from,
+        to: m.to,
+        deco: m.lineClass
+          ? Decoration.line({ class: m.lineClass })
+          : Decoration.replace(m.widget ? { widget: m.widget } : {}),
+      })
     }
 
     widgets.sort((a, b) => a.from - b.from || a.to - b.to)

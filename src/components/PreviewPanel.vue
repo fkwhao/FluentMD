@@ -284,6 +284,66 @@ onBeforeUnmount(() => {
   line-height: 1.6;
 }
 
+.preview-block :deep(.hljs-comment),
+.preview-block :deep(.hljs-quote) {
+  color: var(--syntax-comment);
+  font-style: italic;
+}
+
+.preview-block :deep(.hljs-keyword),
+.preview-block :deep(.hljs-selector-tag),
+.preview-block :deep(.hljs-subst) {
+  color: var(--syntax-keyword);
+}
+
+.preview-block :deep(.hljs-string),
+.preview-block :deep(.hljs-doctag),
+.preview-block :deep(.hljs-regexp),
+.preview-block :deep(.hljs-template-tag),
+.preview-block :deep(.hljs-template-variable) {
+  color: var(--syntax-string);
+}
+
+.preview-block :deep(.hljs-number),
+.preview-block :deep(.hljs-literal),
+.preview-block :deep(.hljs-symbol),
+.preview-block :deep(.hljs-bullet) {
+  color: var(--syntax-number);
+}
+
+.preview-block :deep(.hljs-title),
+.preview-block :deep(.hljs-section),
+.preview-block :deep(.hljs-selector-id) {
+  color: var(--syntax-title);
+  font-weight: 600;
+}
+
+.preview-block :deep(.hljs-variable),
+.preview-block :deep(.hljs-params),
+.preview-block :deep(.hljs-attr),
+.preview-block :deep(.hljs-attribute) {
+  color: var(--syntax-variable);
+}
+
+.preview-block :deep(.hljs-built_in),
+.preview-block :deep(.hljs-type),
+.preview-block :deep(.hljs-class .hljs-title) {
+  color: var(--syntax-type);
+}
+
+.preview-block :deep(.hljs-meta),
+.preview-block :deep(.hljs-meta .hljs-keyword) {
+  color: var(--syntax-meta);
+}
+
+.preview-block :deep(.hljs-addition) {
+  color: var(--syntax-addition);
+}
+
+.preview-block :deep(.hljs-deletion) {
+  color: var(--syntax-deletion);
+}
+
 .preview-block :deep(blockquote) {
   position: relative;
   border: 1px solid color-mix(in srgb, var(--preview-blockquote-border) 26%, var(--preview-table-border));
