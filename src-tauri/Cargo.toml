@@ -1,6 +1,6 @@
 [package]
 name = "fluentmd"
-version = "0.1.1"
+version = "0.1.2"
 description = "FluentMD - A high-performance Markdown editor"
 authors = ["you"]
 license = ""
