@@ -10,6 +10,8 @@ import { bracketMatching, foldGutter, foldKeymap } from '@codemirror/language'
 import { oneDark } from '@codemirror/theme-one-dark'
 import { lightTheme } from '@/utils/lightTheme'
 import { toggleBold, toggleItalic } from '@/utils/formatCommands'
+import { editorSession } from '@/utils/editorSession'
+import { useEditorStore } from '@/stores/editor'
 
 const themeCompartment = new Compartment()
 const readOnlyCompartment = new Compartment()
@@ -69,18 +71,20 @@ export function useCodeMirror(elementRef, options = {}) {
   const isReady = ref(false)
   const pendingTheme = ref(null)
   const pendingContent = ref(initialContent)
+  const editorStore = useEditorStore()
+  let activeDocumentId = editorStore.documentId
+  let disposed = false
+  const allExtensions = () => [...createBaseExtensions(onUpdate, onSelectionChange), ...extensions]
 
   function createEditor() {
     const el = elementRef()
-    if (!el) return
+    if (!el || disposed) return
 
-    const state = EditorState.create({
-      doc: pendingContent.value,
-      extensions: [...createBaseExtensions(onUpdate, onSelectionChange), ...extensions],
-    })
+    activeDocumentId = editorStore.documentId
+    const restored = editorSession.restore(activeDocumentId, pendingContent.value, allExtensions())
 
     editorView.value = new EditorView({
-      state,
+      ...restored,
       parent: el,
     })
 
@@ -97,10 +101,12 @@ export function useCodeMirror(elementRef, options = {}) {
     })
 
     isReady.value = true
+    editorView.value.focus()
   }
 
   function destroyEditor() {
     if (editorView.value) {
+      editorSession.capture(activeDocumentId, editorView.value.state, editorView.value.scrollSnapshot())
       editorView.value.destroy()
       editorView.value = null
       isReady.value = false
@@ -121,6 +127,18 @@ export function useCodeMirror(elementRef, options = {}) {
       ],
     })
   }
+
+  // Opening/new document is a session boundary even if its text is identical.
+  // Mode switches retain history; switching documents must never retain it.
+  watch(() => editorStore.documentId, () => {
+    activeDocumentId = editorStore.documentId
+    pendingContent.value = editorStore.content
+    if (!editorView.value) return
+    editorView.value.setState(EditorState.create({ doc: editorStore.content, extensions: allExtensions() }))
+    if (pendingTheme.value !== null) setTheme(pendingTheme.value)
+    editorView.value.scrollDOM.scrollTop = 0
+    editorView.value.scrollDOM.scrollLeft = 0
+  })
 
   function getContent() {
     return editorView.value?.state.doc.toString() ?? ''
@@ -150,6 +168,7 @@ export function useCodeMirror(elementRef, options = {}) {
 
   onMounted(async () => {
     await nextTick()
+    if (disposed) return
     createEditor()
     if (!isReady.value) {
       const unwatch = watch(() => elementRef(), (el) => {
@@ -162,6 +181,7 @@ export function useCodeMirror(elementRef, options = {}) {
   })
 
   onBeforeUnmount(() => {
+    disposed = true
     destroyEditor()
   })
 

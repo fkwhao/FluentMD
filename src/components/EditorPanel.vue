@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, watch, nextTick } from 'vue'
+import { ref, watch, nextTick } from 'vue'
 import { useCodeMirror } from '@/composables/useCodeMirror'
 import { useEditorStore } from '@/stores/editor'
 import { useSettingsStore } from '@/stores/settings'
@@ -75,10 +75,6 @@ watch(() => editorStore.navigationRequest, async () => {
   setCursor(editorStore.navigationTarget)
 })
 
-onMounted(async () => {
-  await nextTick()
-  setCursor(editorStore.cursorPos)
-})
 </script>
 
 <template>

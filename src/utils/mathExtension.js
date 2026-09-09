@@ -98,94 +98,115 @@ function findClosingDoubleDollar(text) {
   return -1
 }
 
-function findBlockMathDecorations(view, cursor) {
-  const decorations = []
+const blockMathCache = new WeakMap()
+
+function findBlockMathRanges(view) {
   const doc = view.state.doc
-  const visitedLines = new Set()
+  const tree = syntaxTree(view.state)
+  const cached = blockMathCache.get(doc)
+  if (cached?.tree === tree) return cached.blocks
+  const blocks = []
+  let pending = null
 
-  for (const visibleRange of view.visibleRanges) {
-    const firstLine = doc.lineAt(visibleRange.from).number
-    const lastLine = doc.lineAt(Math.min(visibleRange.to, doc.length)).number
+  // Pair delimiters in document order, independently of the viewport and
+  // cursor. Cache the index so scrolling/selection changes don't rescan text.
+  for (let lineNumber = 1; lineNumber <= doc.lines; lineNumber++) {
+    const line = doc.line(lineNumber)
+    const prefix = parseLinePrefix(line.text)
 
-    for (let lineNumber = firstLine; lineNumber <= lastLine; lineNumber++) {
-      if (visitedLines.has(lineNumber)) continue
-      visitedLines.add(lineNumber)
+    if (pending) {
+      let formulaText = line.text
+      let contentFrom = line.from
+      let sameContainer = true
 
-      const openingLine = doc.line(lineNumber)
-      const openingPrefix = parseLinePrefix(openingLine.text)
-      const openingText = openingLine.text.slice(openingPrefix.prefixEnd)
-      if (!openingText.startsWith('$$')) continue
+      if (pending.quoteDepth > 0) {
+        sameContainer = prefix.quoteDepth === pending.quoteDepth
+        formulaText = line.text.slice(prefix.prefixEnd)
+        contentFrom = line.from + prefix.prefixEnd
+      } else if (prefix.quoteDepth > 0) {
+        sameContainer = false
+      }
 
-      const sourceFrom = openingLine.from + openingPrefix.prefixEnd
-      if (isInsideCode(view, sourceFrom)) continue
-
-      const firstContent = openingText.slice(2)
-      const sameLineClose = findClosingDoubleDollar(firstContent)
-
-      if (sameLineClose >= 0) {
-        const sourceTo = sourceFrom + 2 + sameLineClose + 2
-        if (!isSelectionInside(cursor, sourceFrom, sourceTo)) {
-          decorations.push({
-            from: sourceFrom,
-            to: sourceTo,
-            widget: new BlockMathWidget(firstContent.slice(0, sameLineClose).trim()),
+      if (sameContainer) {
+        const close = findClosingDoubleDollar(formulaText)
+        if (close >= 0) {
+          pending.texLines.push(formulaText.slice(0, close))
+          const sourceTo = contentFrom + close + 2
+          pending.continuationLines.push({ line, from: contentFrom, to: sourceTo })
+          blocks.push({
+            from: pending.from, to: sourceTo, openingTo: pending.openingTo,
+            tex: pending.texLines.join('\n').trim(),
+            continuationLines: pending.continuationLines,
           })
+          pending = null
+          continue
         }
+
+        pending.texLines.push(formulaText)
+        pending.continuationLines.push({ line, from: contentFrom, to: line.to })
         continue
       }
 
-      const texLines = [firstContent]
-      const continuationLines = []
-      let sourceTo = -1
+      // A quote boundary invalidates the unmatched opener. Reconsider this
+      // same line below, since it may begin a new formula in its own container.
+      pending = null
+    }
 
-      for (let nextNumber = lineNumber + 1; nextNumber <= doc.lines; nextNumber++) {
-        const line = doc.line(nextNumber)
-        const prefix = parseLinePrefix(line.text)
-        let formulaText = line.text
-        let contentFrom = line.from
+    const openingText = line.text.slice(prefix.prefixEnd)
+    if (!openingText.startsWith('$$')) continue
 
-        if (openingPrefix.quoteDepth > 0) {
-          if (prefix.quoteDepth !== openingPrefix.quoteDepth) break
-          formulaText = line.text.slice(prefix.prefixEnd)
-          contentFrom = line.from + prefix.prefixEnd
-        } else if (prefix.quoteDepth > 0) {
-          break
-        }
+    const sourceFrom = line.from + prefix.prefixEnd
+    if (isInsideCode(view, sourceFrom)) continue
 
-        const close = findClosingDoubleDollar(formulaText)
-        if (close >= 0) {
-          texLines.push(formulaText.slice(0, close))
-          sourceTo = contentFrom + close + 2
-          continuationLines.push({ line, from: contentFrom, to: sourceTo })
-          break
-        }
+    const firstContent = openingText.slice(2)
+    const sameLineClose = findClosingDoubleDollar(firstContent)
 
-        texLines.push(formulaText)
-        continuationLines.push({ line, from: contentFrom, to: line.to })
-      }
-
-      if (sourceTo < 0 || isSelectionInside(cursor, sourceFrom, sourceTo)) continue
-
-      decorations.push({
-        from: sourceFrom,
-        to: openingLine.to,
-        widget: new BlockMathWidget(texLines.join('\n').trim()),
+    if (sameLineClose >= 0) {
+      const sourceTo = sourceFrom + 2 + sameLineClose + 2
+      blocks.push({
+        from: sourceFrom, to: sourceTo, openingTo: sourceTo,
+        tex: firstContent.slice(0, sameLineClose).trim(), continuationLines: [],
       })
+    } else {
+      pending = {
+        from: sourceFrom,
+        openingTo: line.to,
+        quoteDepth: prefix.quoteDepth,
+        texLines: [firstContent],
+        continuationLines: [],
+      }
+    }
+  }
 
-      for (const continuation of continuationLines) {
-        if (continuation.to > continuation.from) {
-          decorations.push({
-            from: continuation.from,
-            to: continuation.to,
-            widget: null,
-          })
-        }
+  blockMathCache.set(doc, { tree, blocks })
+  return blocks
+}
+
+function findBlockMathDecorations(view, cursor, blocks) {
+  const decorations = []
+  for (const block of blocks) {
+    if (!view.visibleRanges.some(range => block.from <= range.to && block.to >= range.from)) continue
+    if (isSelectionInside(cursor, block.from, block.to)) continue
+
+    decorations.push({
+      from: block.from,
+      to: block.openingTo,
+      widget: new BlockMathWidget(block.tex),
+    })
+
+    for (const continuation of block.continuationLines) {
+      if (continuation.to > continuation.from) {
         decorations.push({
-          from: continuation.line.from,
-          to: continuation.line.from,
-          lineClass: 'cm-wysiwyg-math-hidden-line',
+          from: continuation.from,
+          to: continuation.to,
+          widget: null,
         })
       }
+      decorations.push({
+        from: continuation.line.from,
+        to: continuation.line.from,
+        lineClass: 'cm-wysiwyg-math-hidden-line',
+      })
     }
   }
 
@@ -193,7 +214,8 @@ function findBlockMathDecorations(view, cursor) {
 }
 
 export function findMathDecorations(view, cursor) {
-  const decorations = findBlockMathDecorations(view, cursor)
+  const blocks = findBlockMathRanges(view)
+  const decorations = findBlockMathDecorations(view, cursor, blocks)
 
   for (const { from, to } of view.visibleRanges) {
     const text = view.state.doc.sliceString(from, to)
@@ -204,6 +226,7 @@ export function findMathDecorations(view, cursor) {
     while ((match = inlineRegex.exec(text)) !== null) {
       const start = from + match.index
       const end = start + match[0].length
+      if (blocks.some(block => start >= block.from && end <= block.to)) continue
       if (!isSelectionInside(cursor, start, end)) {
         if (!isInsideCode(view, start)) {
           decorations.push({

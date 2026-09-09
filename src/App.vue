@@ -3,6 +3,7 @@ import { defineAsyncComponent, onMounted } from 'vue'
 import { useSettingsStore } from '@/stores/settings'
 import { useEditorStore } from '@/stores/editor'
 import { useTheme } from '@/composables/useTheme'
+import { useWindowCloseGuard } from '@/composables/useWindowCloseGuard'
 import AppToolbar from '@/components/AppToolbar.vue'
 import StatusBar from '@/components/StatusBar.vue'
 import DocumentOutline from '@/components/DocumentOutline.vue'
@@ -14,6 +15,7 @@ const FileTree = defineAsyncComponent(() => import('@/components/FileTree.vue'))
 const settingsStore = useSettingsStore()
 const editorStore = useEditorStore()
 useTheme()
+useWindowCloseGuard()
 
 const initialContent = [
   '# FluentMD',

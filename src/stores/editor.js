@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 
 export const useEditorStore = defineStore('editor', () => {
   const content = ref('')
+  const documentId = ref(0)
   const cursorPos = ref(0)
   const isDirty = ref(false)
   const navigationTarget = ref(0)
@@ -28,6 +29,7 @@ export const useEditorStore = defineStore('editor', () => {
   })
 
   function setContent(text) {
+    documentId.value += 1
     content.value = text
     cursorPos.value = 0
     navigationTarget.value = 0
@@ -73,7 +75,7 @@ export const useEditorStore = defineStore('editor', () => {
   }
 
   return {
-    content, cursorPos, isDirty, navigationTarget, navigationRequest,
+    content, documentId, cursorPos, isDirty, navigationTarget, navigationRequest,
     wordCount, lineCount, charCount, currentLine,
     setContent, updateContent, setCursor, navigateTo, markClean, markDirty
   }

@@ -675,9 +675,8 @@ function buildDecorations(view, getBasePath = () => '', tableCache = null) {
       }
     }
 
-    // Math decorations — skip for large docs (KaTeX rendering is expensive)
-    // The scanner only visits visible ranges. Keep math enabled for large
-    // documents so WYSIWYG matches the split preview instead of showing raw TeX.
+    // Math uses a cached document index and only renders visible formulas.
+    // Keep math enabled for large documents instead of showing raw TeX.
     const mathDecos = findMathDecorations(view, cursor)
     for (const m of mathDecos) {
       if (!m.lineClass && m.to > m.from) {

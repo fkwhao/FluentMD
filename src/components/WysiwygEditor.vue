@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, watch, nextTick } from 'vue'
+import { ref, watch, nextTick } from 'vue'
 import { useCodeMirror } from '@/composables/useCodeMirror'
 import { useEditorStore } from '@/stores/editor'
 import { useFileStore } from '@/stores/file'
@@ -182,10 +182,6 @@ watch(() => fileStore.filePath, () => {
   })
 })
 
-onMounted(async () => {
-  await nextTick()
-  setCursor(editorStore.cursorPos)
-})
 </script>
 
 <template>

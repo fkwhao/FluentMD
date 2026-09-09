@@ -93,3 +93,43 @@ test('removes text decorations that overlap a math replacement range', () => {
   assert.equal(removed, 1)
   assert.deepEqual(decorations, [openingMark, closingMark, lineDecoration])
 })
+
+test('separate multiline formulas do not turn the paragraph between them into math', () => {
+  const doc = ['$$', 'x + y', '$$', '', 'ordinary paragraph', '', '$$', 'a + b', '$$'].join('\n')
+  const widgets = widgetsOfKind(decorationsFor(doc), 'BlockMathWidget')
+  assert.deepEqual(widgets.map(item => item.widget.tex), ['x + y', 'a + b'])
+})
+
+test('scrolling into a multiline formula still finds its original opening delimiter', () => {
+  const doc = ['$$', 'x + y', '$$', '', 'ordinary paragraph', '', '$$', 'a + b', '$$'].join('\n')
+  const state = EditorState.create({ doc, extensions: [markdown({ base: markdownLanguage })] })
+  const widgets = widgetsOfKind(findMathDecorations({
+    state, visibleRanges: [{ from: state.doc.line(2).from, to: doc.length }],
+  }, { from: 0, to: 0 }), 'BlockMathWidget')
+  assert.deepEqual(widgets.map(item => item.widget.tex), ['x + y', 'a + b'])
+})
+
+test('editing one formula never hides the paragraph before the next formula', () => {
+  const doc = ['$$', 'x + y', '$$', '', 'ordinary paragraph', '', '$$', 'a + b', '$$'].join('\n')
+  const widgets = widgetsOfKind(decorationsFor(doc, doc.indexOf('x')), 'BlockMathWidget')
+  assert.deepEqual(widgets.map(item => item.widget.tex), ['a + b'])
+})
+
+test('many unfinished formulas are indexed in linear rather than quadratic work', () => {
+  const doc = Array.from({ length: 200 }, () => '$$ unfinished').join('\n')
+  const state = EditorState.create({ doc, extensions: [markdown({ base: markdownLanguage })] })
+  let lineReads = 0
+  const countedDoc = new Proxy(state.doc, {
+    get(target, key) {
+      if (key === 'line') return number => { lineReads++; return target.line(number) }
+      const value = Reflect.get(target, key)
+      return typeof value === 'function' ? value.bind(target) : value
+    },
+  })
+  const decorations = findMathDecorations({
+    state: { doc: countedDoc, field: state.field.bind(state) },
+    visibleRanges: [{ from: 0, to: doc.length }],
+  }, { from: 0, to: 0 })
+  assert.equal(widgetsOfKind(decorations, 'BlockMathWidget').length, 0)
+  assert.ok(lineReads <= 400, `expected linear work, got ${lineReads} line reads`)
+})
